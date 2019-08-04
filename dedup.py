@@ -1,9 +1,27 @@
 #! /usr/bin/python
 
+import argparse
 import os
 import sys
 import stat
 import hashlib
+import time
+
+parser = argparse.ArgumentParser(
+    formatter_class=argparse.RawTextHelpFormatter)
+
+# parser.add_argument("command", choices=["file", "site"], help=help_text)  # required command
+parser.add_argument( "path", nargs="+",
+                    default=None, type=str, help="filePath")
+parser.add_argument("--verbose", "-v", dest="verbose", default=False,
+                    help="verbose" , action='store_true')
+p = parser.parse_args()
+
+#print("command line:", p, file=sys.stderr)
+
+if p.path is None:
+    print("No path defined", file=sys.stderr)
+    exit()
 
 filesBySize = {}
 
@@ -29,78 +47,114 @@ def walker( dirname, fnames):
 
     os.chdir(d)
 
-for x in sys.argv[1:]:
-    print ('Scanning directory "%s"....' % x)
-    for root, dirs, files in os.walk(x):
+for thisMapValue in p.path:
+    if p.verbose:
+        print ('Scanning directory "%s"....' % thisMapValue)
+
+    for root, dirs, files in os.walk(thisMapValue):
         #print ('Scanning directory "%s"....' % root)
         walker(root,files)
 
-print ('Finding potential dupes...')
+duplicateList = []
+
+if p.verbose:
+    print ('Finding potential dupes...')
 potentialDupes = []
 potentialCount = 0
-trueType = type(True)
-sizes = list(filesBySize.keys())
-sizes.sort()
-for k in sizes:
-    inFiles = filesBySize[k]
-    outFiles = []
-    hashes = {}
-    if len(inFiles) is 1: continue
-    print ('Testing %d files of size %d...' % (len(inFiles), k))
-    for fileName in inFiles:
+sizeList = list(filesBySize.keys())
+sizeList.sort()
+for size in sizeList:
+    sameSizeFiles = filesBySize[size]
+
+    if len(sameSizeFiles) is 1:
+        continue
+    if p.verbose:
+        print ('Short Test %d files of size %d' % (len(sameSizeFiles), size))
+
+    sameSizeFileHashMap = {}
+    for fileName in sameSizeFiles:
         if not os.path.isfile(fileName):
             continue
+
         aFile = open(fileName, 'rb')
         hashValue = hashlib.sha3_256(aFile.read(1024)).digest()
-        if hashValue in hashes.keys():
-            x = hashes[hashValue]
-            if type(x) is not trueType:
-                outFiles.append(hashes[hashValue])
-                hashes[hashValue] = True
-            outFiles.append(fileName)
+        if hashValue in sameSizeFileHashMap.keys():
+            sameSizeFileHashMap[hashValue].append(fileName)
         else:
-            hashes[hashValue] = fileName
+            sameSizeFileHashMap[hashValue] = [fileName]
         aFile.close()
-    if len(outFiles):
-        potentialDupes.append(outFiles)
-        potentialCount = potentialCount + len(outFiles)
+
+    for hashKey in sameSizeFileHashMap.keys():
+        fileList = sameSizeFileHashMap.get(hashKey)
+        if len(fileList) <= 1:
+            continue
+        if size < 1024:
+            if p.verbose:
+                print("Short file duplicate found: %s" % fileList[0])
+
+            duplicateList.append( (size,fileList) )  # add file list tagged with size of file
+            continue
+
+        # queueing for long file test
+        potentialDupes.append(fileList)
+        potentialCount = potentialCount + len(fileList)
+
 del filesBySize
 
-print ('Found %d sets of potential dupes...' % potentialCount)
-print ('Scanning for real dupes...')
+if p.verbose:
+    print ('Found %d sets of potential dupes...' % potentialCount)
+    print ('Scanning for long file dupes...')
 
-# could make this faster by recognizing that we've already validated all dupes for files less than 1024 bytes, don't need to
-# check again
 
-dupes = []
 for aSet in potentialDupes:
-    outFiles = []
-    hashes = {}
+    sameSizeFileHashMap = {}
+
+    size = os.path.getsize(aSet[0])
+
     for fileName in aSet:
-        print ('Scanning file "%s"...' % fileName)
+        if p.verbose:
+            print ('Scanning file "%s"...' % fileName)
         aFile = open(fileName, 'rb')
         hasher =  hashlib.sha3_256()
         while True:
-            r = aFile.read(4096)
+            r = aFile.read(4096)  # unclear why so small
             if not len(r):
                 break
             hasher.update(r)
         aFile.close()
         hashValue = hasher.digest()
-        if hashValue in hashes.keys():
-            if not len(outFiles):
-                outFiles.append(hashes[hashValue])
-            outFiles.append(fileName)
+
+        if hashValue in sameSizeFileHashMap.keys():
+            sameSizeFileHashMap[hashValue].append(fileName)
         else:
-            hashes[hashValue] = fileName
-    if len(outFiles):
-        dupes.append(outFiles)
+            sameSizeFileHashMap[hashValue] = [fileName]
+
+    for hashKey in sameSizeFileHashMap.keys():
+        fileList = sameSizeFileHashMap.get(hashKey)
+        if len(fileList) <=1:
+            continue
+        duplicateList.append( (size,fileList))
+
+# largest duplicate files first
+duplicateList.sort( key = lambda v: v[0],reverse=True)
 
 i = 0
-for d in dupes:
-    print ('\n\nOriginal is %s' % d[0])
-    for f in d[1:]:
+for taggedFileList in duplicateList:
+    fileSize = taggedFileList[0]
+    fileList = taggedFileList[1]
+    timeMap = {}
+    for fileName in fileList:
+        timeMap[os.path.getmtime(fileName)] = fileName
+    orderedTimesList = list(timeMap.keys())
+    orderedTimesList.sort()
+
+    first = orderedTimesList[0]
+    rest = orderedTimesList[1:]
+
+    print ('\n\nOriginal is %10d %s -- %s' % (fileSize,time.strftime("%m/%d/%Y %H:%M:%S",time.gmtime(first)),timeMap[first]))
+
+    for t in rest:
         i = i + 1
-        print ('    Able to Delete %s' % f)
+        print ('    Able to Delete %s -- %s' % (time.strftime("%m/%d/%Y %H:%M:%S",time.gmtime(t)),timeMap[t]))
         #os.remove(f)
 print ( "total Dupes: ", i)
