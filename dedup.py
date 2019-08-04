@@ -154,7 +154,7 @@ for taggedFileList in duplicateList:
     rest = orderedTimesList[1:]
     foundDupes += len(rest)
 
-    print ('\n\nOriginal is %10d %s -- %s' % (fileSize,time.strftime("%m/%d/%Y %H:%M:%S",time.gmtime(first)),timeMap[first]))
+    print ('\n\nOriginal is %10d bytes Mod Date: %s -- %s' % (fileSize,time.strftime("%m/%d/%Y %H:%M:%S",time.gmtime(first)),timeMap[first]))
 
     for t in rest:
         print ('    Able to Delete %s -- %s' % (time.strftime("%m/%d/%Y %H:%M:%S",time.gmtime(t)),timeMap[t]))
