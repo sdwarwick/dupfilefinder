@@ -24,6 +24,7 @@ if p.path is None:
     exit()
 
 filesBySize = {}
+totalInputFiles = 0
 
 def walker( dirname, fnames):
     # add files in the specified directory to the file list, sorted and skipping small files
@@ -53,6 +54,7 @@ for thisMapValue in p.path:
 
     for root, dirs, files in os.walk(thisMapValue):
         #print ('Scanning directory "%s"....' % root)
+        totalInputFiles += len(files)
         walker(root,files)
 
 duplicateList = []
@@ -138,7 +140,7 @@ for aSet in potentialDupes:
 # largest duplicate files first
 duplicateList.sort( key = lambda v: v[0],reverse=True)
 
-i = 0
+foundDupes = 0
 for taggedFileList in duplicateList:
     fileSize = taggedFileList[0]
     fileList = taggedFileList[1]
@@ -150,11 +152,12 @@ for taggedFileList in duplicateList:
 
     first = orderedTimesList[0]
     rest = orderedTimesList[1:]
+    foundDupes += len(rest)
 
     print ('\n\nOriginal is %10d %s -- %s' % (fileSize,time.strftime("%m/%d/%Y %H:%M:%S",time.gmtime(first)),timeMap[first]))
 
     for t in rest:
-        i = i + 1
         print ('    Able to Delete %s -- %s' % (time.strftime("%m/%d/%Y %H:%M:%S",time.gmtime(t)),timeMap[t]))
-        #os.remove(f)
-print ( "total Dupes: ", i)
+        #os.remove(f) - Dont do this!!!
+print ( "total Dupes: ", foundDupes)
+print ( "total Input Files: ", totalInputFiles)
