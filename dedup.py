@@ -159,5 +159,6 @@ for taggedFileList in duplicateList:
     for t in rest:
         print ('    Able to Delete %s -- %s' % (time.strftime("%m/%d/%Y %H:%M:%S",time.gmtime(t)),timeMap[t]))
         #os.remove(f) - Dont do this!!!
+
+print ( "\ntotal Input Files: ", totalInputFiles)
 print ( "total Dupes: ", foundDupes)
-print ( "total Input Files: ", totalInputFiles)
